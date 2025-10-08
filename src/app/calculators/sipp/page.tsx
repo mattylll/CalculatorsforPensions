@@ -9,8 +9,8 @@ import { Slider } from '@/components/ui/slider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Briefcase, TrendingUp, DollarSign, Shield, AlertTriangle, CheckCircle, Info } from 'lucide-react'
 import { useJourneyState } from '@/hooks/useJourneyState'
-import SmartGate from '@/components/journey/SmartGate'
-import ProgressTracker from '@/components/journey/ProgressTracker'
+import { SmartGate } from '@/components/journey/SmartGate'
+import { ProgressTracker } from '@/components/journey/ProgressTracker'
 
 export default function SIPPCalculatorPage() {
   const [inputs, setInputs] = useState({
