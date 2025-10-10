@@ -60,6 +60,18 @@ export default function PensionDrawdownCalculatorPage() {
     const yearsInRetirement = inputs.lifeExpectancy - inputs.retirementAge
     const totalYears = inputs.lifeExpectancy - inputs.currentAge
 
+    // Add initial starting point (current state)
+    yearlyProjection.push({
+      year: -1,
+      age: inputs.currentAge,
+      startBalance: inputs.pensionPot,
+      contribution: 0,
+      withdrawal: 0,
+      growth: 0,
+      endBalance: inputs.pensionPot,
+      phase: 'current'
+    })
+
     // Phase 1: Accumulation (before retirement)
     for (let year = 0; year < yearsToRetirement; year++) {
       const age = inputs.currentAge + year
@@ -87,24 +99,10 @@ export default function PensionDrawdownCalculatorPage() {
     const remainingPotAfterLumpSum = potAtRetirement - taxFreeLumpSumAmount
     currentPot = remainingPotAfterLumpSum
 
-    // Add retirement year (lump sum taken)
-    if (yearsToRetirement >= 0) {
-      yearlyProjection.push({
-        year: yearsToRetirement,
-        age: inputs.retirementAge,
-        startBalance: potAtRetirement,
-        contribution: 0,
-        withdrawal: taxFreeLumpSumAmount,
-        growth: 0,
-        endBalance: currentPot,
-        phase: 'retirement_start'
-      })
-    }
-
     // Phase 2: Drawdown (retirement onwards)
-    for (let year = 1; year <= yearsInRetirement; year++) {
+    for (let year = 0; year <= yearsInRetirement; year++) {
       const age = inputs.retirementAge + year
-      const withdrawal = inputs.annualPensionRequirement
+      const withdrawal = year === 0 ? 0 : inputs.annualPensionRequirement
       const growthAmount = currentPot * netGrowthRate
       const endBalance = Math.max(0, currentPot + growthAmount - withdrawal)
 
@@ -116,7 +114,7 @@ export default function PensionDrawdownCalculatorPage() {
         withdrawal: withdrawal,
         growth: growthAmount,
         endBalance: endBalance,
-        phase: 'drawdown'
+        phase: year === 0 ? 'retirement_start' : 'drawdown'
       })
 
       currentPot = endBalance
@@ -502,7 +500,10 @@ export default function PensionDrawdownCalculatorPage() {
                         {formatCurrency(liveResults.taxFreeLumpSum)}
                       </p>
                       <p className="text-sm text-green-700 dark:text-green-400 mt-2">
-                        Available immediately, no tax to pay
+                        {inputs.currentAge >= inputs.retirementAge
+                          ? 'Available immediately, no tax to pay'
+                          : `Available at retirement (age ${inputs.retirementAge}), no tax to pay`
+                        }
                       </p>
                     </div>
                   )}
@@ -558,34 +559,44 @@ export default function PensionDrawdownCalculatorPage() {
                             </linearGradient>
                           </defs>
 
-                          <path
-                            d={`M 0,${100 - ((liveResults.remainingPot / maxPotValue) * 100)} ${liveResults.yearlyProjection.slice(0, 30).map((year, index) => {
-                              const x = ((index + 1) / 30) * 100
-                              const y = 100 - ((year.endBalance / maxPotValue) * 100)
-                              return `L ${x},${y}`
-                            }).join(' ')} L 100,100 L 0,100 Z`}
-                            fill="url(#areaGradient)"
-                            className="transition-all duration-300"
-                          />
+                          {(() => {
+                            const dataPoints = liveResults.yearlyProjection.slice(0, 31) // Include initial point + 30 years
+                            const totalPoints = dataPoints.length
 
-                          {/* Main line */}
-                          <path
-                            d={`M 0,${100 - ((liveResults.remainingPot / maxPotValue) * 100)} ${liveResults.yearlyProjection.slice(0, 30).map((year, index) => {
-                              const x = ((index + 1) / 30) * 100
+                            // Build path from all data points
+                            const pathCommands = dataPoints.map((year, index) => {
+                              const x = (index / (totalPoints - 1)) * 100
                               const y = 100 - ((year.endBalance / maxPotValue) * 100)
-                              return `L ${x},${y}`
-                            }).join(' ')}`}
-                            fill="none"
-                            stroke="rgb(59, 130, 246)"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="transition-all duration-300"
-                          />
+                              return index === 0 ? `M ${x},${y}` : `L ${x},${y}`
+                            }).join(' ')
+
+                            return (
+                              <>
+                                {/* Area fill under the line */}
+                                <path
+                                  d={`${pathCommands} L 100,100 L 0,100 Z`}
+                                  fill="url(#areaGradient)"
+                                  className="transition-all duration-300"
+                                />
+
+                                {/* Main line */}
+                                <path
+                                  d={pathCommands}
+                                  fill="none"
+                                  stroke="rgb(59, 130, 246)"
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="transition-all duration-300"
+                                />
+                              </>
+                            )
+                          })()}
 
                           {/* Data points with hover zones */}
-                          {liveResults.yearlyProjection.slice(0, 30).map((year, index) => {
-                            const x = ((index + 1) / 30) * 100
+                          {liveResults.yearlyProjection.slice(0, 31).map((year, index) => {
+                            const totalPoints = liveResults.yearlyProjection.slice(0, 31).length
+                            const x = (index / (totalPoints - 1)) * 100
                             const y = 100 - ((year.endBalance / maxPotValue) * 100)
                             const isWarning = year.endBalance < liveResults.remainingPot * 0.25 && year.endBalance > 0
                             const isDepleted = year.endBalance <= 0
