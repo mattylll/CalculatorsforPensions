@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Wallet, Check, ArrowRight, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Wallet, Check, ArrowRight, AlertCircle, TrendingDown, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -31,10 +31,11 @@ export default function PensionDrawdownCalculatorPage() {
 
   const [inputs, setInputs] = useState({
     pensionPot: 250000,
+    currentAge: 55,
     retirementAge: 67,
-    currentAge: 67,
     lifeExpectancy: 90,
-    withdrawalRate: 4,
+    monthlyContribution: 500,
+    annualPensionRequirement: 15000,
     annualGrowthRate: 5,
     inflationRate: 2.5,
     taxFreeLumpSum: 25
@@ -49,6 +50,97 @@ export default function PensionDrawdownCalculatorPage() {
       trackEvent('calculator_started', { calculator: 'pension-drawdown' })
     }
   }, [isInitialized, trackEvent])
+
+  // Calculate results in real-time as inputs change
+  const liveResults = useMemo(() => {
+    const yearlyProjection = []
+    let currentPot = inputs.pensionPot
+    const netGrowthRate = (inputs.annualGrowthRate - inputs.inflationRate) / 100
+    const yearsToRetirement = Math.max(0, inputs.retirementAge - inputs.currentAge)
+    const yearsInRetirement = inputs.lifeExpectancy - inputs.retirementAge
+    const totalYears = inputs.lifeExpectancy - inputs.currentAge
+
+    // Phase 1: Accumulation (before retirement)
+    for (let year = 0; year < yearsToRetirement; year++) {
+      const age = inputs.currentAge + year
+      const annualContribution = inputs.monthlyContribution * 12
+      const growthAmount = currentPot * netGrowthRate
+      const endBalance = currentPot + growthAmount + annualContribution
+
+      yearlyProjection.push({
+        year: year,
+        age: age,
+        startBalance: currentPot,
+        contribution: annualContribution,
+        withdrawal: 0,
+        growth: growthAmount,
+        endBalance: endBalance,
+        phase: 'accumulation'
+      })
+
+      currentPot = endBalance
+    }
+
+    // Pot at retirement (after tax-free lump sum)
+    const potAtRetirement = currentPot
+    const taxFreeLumpSumAmount = potAtRetirement * (inputs.taxFreeLumpSum / 100)
+    const remainingPotAfterLumpSum = potAtRetirement - taxFreeLumpSumAmount
+    currentPot = remainingPotAfterLumpSum
+
+    // Add retirement year (lump sum taken)
+    if (yearsToRetirement >= 0) {
+      yearlyProjection.push({
+        year: yearsToRetirement,
+        age: inputs.retirementAge,
+        startBalance: potAtRetirement,
+        contribution: 0,
+        withdrawal: taxFreeLumpSumAmount,
+        growth: 0,
+        endBalance: currentPot,
+        phase: 'retirement_start'
+      })
+    }
+
+    // Phase 2: Drawdown (retirement onwards)
+    for (let year = 1; year <= yearsInRetirement; year++) {
+      const age = inputs.retirementAge + year
+      const withdrawal = inputs.annualPensionRequirement
+      const growthAmount = currentPot * netGrowthRate
+      const endBalance = Math.max(0, currentPot + growthAmount - withdrawal)
+
+      yearlyProjection.push({
+        year: yearsToRetirement + year,
+        age: age,
+        startBalance: currentPot,
+        contribution: 0,
+        withdrawal: withdrawal,
+        growth: growthAmount,
+        endBalance: endBalance,
+        phase: 'drawdown'
+      })
+
+      currentPot = endBalance
+      if (currentPot <= 0) break
+    }
+
+    const potDepletionYear = yearlyProjection.findIndex(y => y.phase === 'drawdown' && y.endBalance <= 0)
+    const yearsUntilDepletion = potDepletionYear === -1 ? totalYears : potDepletionYear
+    const withdrawalRate = remainingPotAfterLumpSum > 0 ? (inputs.annualPensionRequirement / remainingPotAfterLumpSum) * 100 : 0
+
+    return {
+      taxFreeLumpSum: taxFreeLumpSumAmount,
+      potAtRetirement,
+      remainingPot: remainingPotAfterLumpSum,
+      annualIncome: inputs.annualPensionRequirement,
+      monthlyIncome: inputs.annualPensionRequirement / 12,
+      yearsOfIncome: totalYears,
+      yearsUntilDepletion,
+      withdrawalRate,
+      yearsToRetirement,
+      sustainabilityRating: yearsUntilDepletion >= totalYears ? 'Sustainable' : 'At Risk',
+      yearlyProjection
+    }
+  }, [inputs])
 
   const handleSmartGateSubmit = (profileData: any) => {
     updateUserProfile(profileData)
@@ -92,30 +184,10 @@ export default function PensionDrawdownCalculatorPage() {
     setIsCalculating(true)
     setTimeout(() => {
       try {
-        // Simple drawdown calculation
-        const taxFreeLumpSumAmount = inputs.pensionPot * (inputs.taxFreeLumpSum / 100)
-        const remainingPot = inputs.pensionPot - taxFreeLumpSumAmount
-        const annualIncome = remainingPot * (inputs.withdrawalRate / 100)
-        const monthlyIncome = annualIncome / 12
-        const yearsOfIncome = inputs.lifeExpectancy - inputs.currentAge
-        const totalWithdrawn = annualIncome * yearsOfIncome
-        const potDepletionYear = remainingPot / annualIncome
-
-        const result = {
-          taxFreeLumpSum: taxFreeLumpSumAmount,
-          remainingPot,
-          annualIncome,
-          monthlyIncome,
-          yearsOfIncome,
-          totalWithdrawn,
-          potDepletionYear,
-          sustainabilityRating: potDepletionYear >= yearsOfIncome ? 'Sustainable' : 'At Risk'
-        }
-
         const gateDecision = checkGate()
 
         if (gateDecision && gateDecision.shouldShowGate && !userEmail) {
-          setPendingResults(result)
+          setPendingResults(liveResults)
           setShowSmartGate(true)
           setIsCalculating(false)
         } else {
@@ -123,16 +195,16 @@ export default function PensionDrawdownCalculatorPage() {
             'pension-drawdown',
             inputs,
             {
-              primaryValue: result.annualIncome,
+              primaryValue: liveResults.annualIncome,
               secondaryValues: {
-                monthlyIncome: result.monthlyIncome,
-                taxFreeLumpSum: result.taxFreeLumpSum,
+                monthlyIncome: liveResults.monthlyIncome,
+                taxFreeLumpSum: liveResults.taxFreeLumpSum,
               }
             },
             60
           )
 
-          setResults(result)
+          setResults(liveResults)
           setHasCalculated(true)
           setIsCalculating(false)
           document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' })
@@ -144,6 +216,18 @@ export default function PensionDrawdownCalculatorPage() {
       }
     }, 500)
   }
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value)
+  }
+
+  // Get max value for chart scaling
+  const maxPotValue = Math.max(inputs.pensionPot, ...liveResults.yearlyProjection.map(y => y.endBalance))
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -192,7 +276,7 @@ export default function PensionDrawdownCalculatorPage() {
                 <CardHeader>
                   <CardTitle className="text-2xl">Your Details</CardTitle>
                   <CardDescription>
-                    Enter your pension pot and withdrawal preferences
+                    Enter your pension pot and income requirements
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -209,7 +293,7 @@ export default function PensionDrawdownCalculatorPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Current Age</Label>
                       <Input
@@ -217,6 +301,19 @@ export default function PensionDrawdownCalculatorPage() {
                         value={inputs.currentAge}
                         onChange={(e) => setInputs({ ...inputs, currentAge: Number(e.target.value) })}
                         className="border-gray-200 dark:border-gray-800"
+                        min="18"
+                        max="75"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Retirement Age</Label>
+                      <Input
+                        type="number"
+                        value={inputs.retirementAge}
+                        onChange={(e) => setInputs({ ...inputs, retirementAge: Number(e.target.value) })}
+                        className="border-gray-200 dark:border-gray-800"
+                        min="55"
+                        max="75"
                       />
                     </div>
                     <div className="space-y-2">
@@ -226,33 +323,68 @@ export default function PensionDrawdownCalculatorPage() {
                         value={inputs.lifeExpectancy}
                         onChange={(e) => setInputs({ ...inputs, lifeExpectancy: Number(e.target.value) })}
                         className="border-gray-200 dark:border-gray-800"
+                        min="60"
+                        max="100"
                       />
                     </div>
                   </div>
 
+                  {inputs.currentAge < inputs.retirementAge && (
+                    <div className="space-y-2">
+                      <Label>Monthly Contribution (until retirement)</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600 dark:text-gray-400">£</span>
+                        <Input
+                          type="number"
+                          value={inputs.monthlyContribution}
+                          onChange={(e) => setInputs({ ...inputs, monthlyContribution: Number(e.target.value) })}
+                          className="border-gray-200 dark:border-gray-800"
+                          step="50"
+                        />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">per month</span>
+                      </div>
+                      <Slider
+                        value={[inputs.monthlyContribution]}
+                        onValueChange={([value]) => setInputs({ ...inputs, monthlyContribution: value })}
+                        min={0}
+                        max={3000}
+                        step={50}
+                        className="py-4"
+                      />
+                      <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                        <span>£0</span>
+                        <span>Current: {formatCurrency(inputs.monthlyContribution)}/month</span>
+                        <span>£3,000</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
-                    <Label>Annual Withdrawal Rate (%)</Label>
-                    <div className="flex items-center gap-4 mb-2">
+                    <Label>Annual Pension Requirement</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600 dark:text-gray-400">£</span>
                       <Input
                         type="number"
-                        value={inputs.withdrawalRate}
-                        onChange={(e) => setInputs({ ...inputs, withdrawalRate: Number(e.target.value) })}
-                        className="w-24 border-gray-200 dark:border-gray-800"
-                        step="0.5"
+                        value={inputs.annualPensionRequirement}
+                        onChange={(e) => setInputs({ ...inputs, annualPensionRequirement: Number(e.target.value) })}
+                        className="border-gray-200 dark:border-gray-800"
+                        step="1000"
                       />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">% per year</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">per year</span>
                     </div>
                     <Slider
-                      value={[inputs.withdrawalRate]}
-                      onValueChange={([value]) => setInputs({ ...inputs, withdrawalRate: value })}
-                      min={1}
-                      max={10}
-                      step={0.5}
+                      value={[inputs.annualPensionRequirement]}
+                      onValueChange={([value]) => setInputs({ ...inputs, annualPensionRequirement: value })}
+                      min={5000}
+                      max={50000}
+                      step={1000}
                       className="py-4"
                     />
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      Safe withdrawal rate: 3-4% per year
-                    </p>
+                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                      <span>£5,000</span>
+                      <span>Current: {formatCurrency(inputs.annualPensionRequirement)}</span>
+                      <span>£50,000</span>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -298,6 +430,28 @@ export default function PensionDrawdownCalculatorPage() {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <Label>Expected Inflation Rate (%)</Label>
+                    <div className="flex items-center gap-4 mb-2">
+                      <Input
+                        type="number"
+                        value={inputs.inflationRate}
+                        onChange={(e) => setInputs({ ...inputs, inflationRate: Number(e.target.value) })}
+                        className="w-24 border-gray-200 dark:border-gray-800"
+                        step="0.5"
+                      />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">% per year</span>
+                    </div>
+                    <Slider
+                      value={[inputs.inflationRate]}
+                      onValueChange={([value]) => setInputs({ ...inputs, inflationRate: value })}
+                      min={0}
+                      max={10}
+                      step={0.5}
+                      className="py-4"
+                    />
+                  </div>
+
                   <Button
                     onClick={handleCalculate}
                     className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white h-11"
@@ -309,188 +463,216 @@ export default function PensionDrawdownCalculatorPage() {
               </Card>
             </div>
 
-            {/* Results */}
+            {/* Live Results & Visualization */}
             <div id="results">
-              {hasCalculated && results ? (
-                <Card className="border-gray-200 dark:border-gray-800">
-                  <CardHeader>
-                    <CardTitle className="text-2xl">Your Drawdown Plan</CardTitle>
-                    <CardDescription>Sustainable income projection</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {inputs.taxFreeLumpSum > 0 && (
-                      <div className="p-6 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
-                        <p className="text-sm text-green-800 dark:text-green-300 mb-2">Tax-Free Lump Sum</p>
-                        <p className="text-4xl font-bold text-green-900 dark:text-green-100">
-                          £{results.taxFreeLumpSum.toLocaleString()}
-                        </p>
-                        <p className="text-sm text-green-700 dark:text-green-400 mt-2">
-                          Available immediately, no tax to pay
-                        </p>
-                      </div>
-                    )}
-
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Annual Income</p>
-                      <p className="text-4xl font-bold text-gray-900 dark:text-white">
-                        £{results.annualIncome.toLocaleString()}
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-2xl">Your Drawdown Plan</CardTitle>
+                  <CardDescription>Live projection based on your inputs</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Withdrawal Rate</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {liveResults.withdrawalRate.toFixed(1)}%
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {liveResults.withdrawalRate <= 4 ? 'Safe' : liveResults.withdrawalRate <= 6 ? 'Moderate' : 'High risk'}
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Monthly Income</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                          £{Math.round(results.monthlyIncome).toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Remaining Pot</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                          £{results.remainingPot.toLocaleString()}
-                        </p>
-                      </div>
+                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Years Until Depletion</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {liveResults.yearsUntilDepletion === liveResults.yearsOfIncome ? `${liveResults.yearsUntilDepletion}+` : liveResults.yearsUntilDepletion}
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        Age {inputs.currentAge + liveResults.yearsUntilDepletion}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tax-Free Lump Sum */}
+                  {inputs.taxFreeLumpSum > 0 && (
+                    <div className="p-6 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+                      <p className="text-sm text-green-800 dark:text-green-300 mb-2">Tax-Free Lump Sum</p>
+                      <p className="text-4xl font-bold text-green-900 dark:text-green-100">
+                        {formatCurrency(liveResults.taxFreeLumpSum)}
+                      </p>
+                      <p className="text-sm text-green-700 dark:text-green-400 mt-2">
+                        Available immediately, no tax to pay
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Annual/Monthly Income */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Annual Income</p>
+                      <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        {formatCurrency(liveResults.annualIncome)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Monthly Income</p>
+                      <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        {formatCurrency(liveResults.monthlyIncome)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Pot Depletion Chart */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Pension Pot Over Time</h3>
+                      <TrendingDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                     </div>
 
-                    <div className="p-6 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-                      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Sustainability Analysis</h3>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Years of income needed</span>
-                          <span className="font-semibold text-gray-900 dark:text-white">
-                            {results.yearsOfIncome} years
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Pot depletion (current rate)</span>
-                          <span className="font-semibold text-gray-900 dark:text-white">
-                            {Math.round(results.potDepletionYear)} years
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Sustainability rating</span>
-                          <span className={`font-semibold ${results.sustainabilityRating === 'Sustainable' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                            {results.sustainabilityRating}
-                          </span>
-                        </div>
+                    <div className="relative h-80 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+                      {/* Y-axis labels */}
+                      <div className="absolute left-2 top-8 bottom-12 flex flex-col justify-between text-xs text-gray-600 dark:text-gray-400 w-16 text-right pr-2">
+                        <span>{formatCurrency(maxPotValue)}</span>
+                        <span>{formatCurrency(maxPotValue * 0.75)}</span>
+                        <span>{formatCurrency(maxPotValue * 0.5)}</span>
+                        <span>{formatCurrency(maxPotValue * 0.25)}</span>
+                        <span>£0</span>
+                      </div>
+
+                      {/* Chart area with SVG line */}
+                      <div className="ml-20 mr-4 h-[calc(100%-3rem)] relative">
+                        <svg className="w-full h-full" preserveAspectRatio="none">
+                          {/* Grid lines */}
+                          <line x1="0" y1="0%" x2="100%" y2="0%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
+                          <line x1="0" y1="25%" x2="100%" y2="25%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
+                          <line x1="0" y1="50%" x2="100%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
+                          <line x1="0" y1="75%" x2="100%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
+                          <line x1="0" y1="100%" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" />
+
+                          {/* Area fill under the line */}
+                          <defs>
+                            <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.3" />
+                              <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.05" />
+                            </linearGradient>
+                          </defs>
+
+                          <path
+                            d={`M 0,${100 - ((liveResults.remainingPot / maxPotValue) * 100)} ${liveResults.yearlyProjection.slice(0, 30).map((year, index) => {
+                              const x = ((index + 1) / 30) * 100
+                              const y = 100 - ((year.endBalance / maxPotValue) * 100)
+                              return `L ${x},${y}`
+                            }).join(' ')} L 100,100 L 0,100 Z`}
+                            fill="url(#areaGradient)"
+                            className="transition-all duration-300"
+                          />
+
+                          {/* Main line */}
+                          <path
+                            d={`M 0,${100 - ((liveResults.remainingPot / maxPotValue) * 100)} ${liveResults.yearlyProjection.slice(0, 30).map((year, index) => {
+                              const x = ((index + 1) / 30) * 100
+                              const y = 100 - ((year.endBalance / maxPotValue) * 100)
+                              return `L ${x},${y}`
+                            }).join(' ')}`}
+                            fill="none"
+                            stroke="rgb(59, 130, 246)"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="transition-all duration-300"
+                          />
+
+                          {/* Data points with hover zones */}
+                          {liveResults.yearlyProjection.slice(0, 30).map((year, index) => {
+                            const x = ((index + 1) / 30) * 100
+                            const y = 100 - ((year.endBalance / maxPotValue) * 100)
+                            const isWarning = year.endBalance < liveResults.remainingPot * 0.25 && year.endBalance > 0
+                            const isDepleted = year.endBalance <= 0
+
+                            return (
+                              <g key={index} className="group">
+                                {/* Invisible hover zone */}
+                                <circle
+                                  cx={`${x}%`}
+                                  cy={`${y}%`}
+                                  r="8"
+                                  fill="transparent"
+                                  className="cursor-pointer"
+                                />
+                                {/* Visible dot */}
+                                <circle
+                                  cx={`${x}%`}
+                                  cy={`${y}%`}
+                                  r="4"
+                                  fill={isDepleted ? 'rgb(239, 68, 68)' : isWarning ? 'rgb(249, 115, 22)' : 'rgb(59, 130, 246)'}
+                                  className="transition-all group-hover:r-6"
+                                  style={{ transformOrigin: `${x}% ${y}%` }}
+                                />
+                                {/* Tooltip - positioned in HTML coordinates */}
+                                <foreignObject
+                                  x={`${Math.max(5, Math.min(x - 10, 80))}%`}
+                                  y={`${Math.max(2, y - 25)}%`}
+                                  width="20%"
+                                  height="20%"
+                                  className="overflow-visible pointer-events-none"
+                                >
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded shadow-lg whitespace-nowrap">
+                                      <div className="font-semibold">Age {year.age}</div>
+                                      <div>Balance: {formatCurrency(year.endBalance)}</div>
+                                      <div>Withdrawal: {formatCurrency(year.withdrawal)}</div>
+                                    </div>
+                                  </div>
+                                </foreignObject>
+                              </g>
+                            )
+                          })}
+                        </svg>
+                      </div>
+
+                      {/* X-axis labels */}
+                      <div className="ml-20 mr-4 mt-2 flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                        <span>Age {inputs.currentAge}</span>
+                        <span>Age {inputs.currentAge + 15}</span>
+                        <span>Age {Math.min(inputs.currentAge + 30, inputs.lifeExpectancy)}</span>
                       </div>
                     </div>
+                  </div>
 
-                    {results.sustainabilityRating === 'At Risk' && (
-                      <Alert className="border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/30">
-                        <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                        <AlertDescription className="text-gray-900 dark:text-white">
-                          <strong>Warning:</strong> Your current withdrawal rate may deplete your pot before life expectancy.
-                          <div className="mt-2 text-sm">
-                            Consider reducing your withdrawal rate to {Math.floor((results.remainingPot / results.yearsOfIncome) / results.remainingPot * 100)}% for better sustainability.
-                          </div>
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                  {/* Sustainability Warning */}
+                  {liveResults.sustainabilityRating === 'At Risk' && (
+                    <Alert className="border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950">
+                      <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                      <AlertDescription className="text-orange-600 dark:text-orange-400">
+                        Your pension pot may run out before age {inputs.lifeExpectancy}. Consider reducing your annual withdrawal or increasing expected growth.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                    <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-                      <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">Key Assumptions</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Withdrawal rate</span>
-                          <span className="text-gray-900 dark:text-white">{inputs.withdrawalRate}% per year</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Expected growth</span>
-                          <span className="text-gray-900 dark:text-white">{inputs.annualGrowthRate}% per year</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Inflation assumption</span>
-                          <span className="text-gray-900 dark:text-white">{inputs.inflationRate}% per year</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={() => window.location.href = '/dashboard'}
-                      className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-900 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
-                    >
-                      View Complete Analysis
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="border-gray-200 dark:border-gray-800">
-                  <CardContent className="py-16 text-center">
-                    <Wallet className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Ready to Calculate</h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Enter your details and click "Calculate Drawdown" to see your income plan
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+                  {liveResults.withdrawalRate > 6 && (
+                    <Alert className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950">
+                      <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                      <AlertDescription className="text-red-600 dark:text-red-400">
+                        Warning: Withdrawal rate of {liveResults.withdrawalRate.toFixed(1)}% is considered high risk. The safe withdrawal rate is typically 3-4% per year.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Key Information */}
-      <section className="py-16 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Key Information</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                title: 'Flexibility',
-                points: [
-                  'Access from age 55 (57 from 2028)',
-                  'Take as much or little as needed',
-                  'Change withdrawals anytime'
-                ]
-              },
-              {
-                title: 'Tax Treatment',
-                points: [
-                  '25% tax-free lump sum',
-                  'Withdrawals taxed as income',
-                  'Manage tax efficiently'
-                ]
-              },
-              {
-                title: 'Risks',
-                points: [
-                  'Investment value can fall',
-                  'Pot may run out early',
-                  'No guaranteed income'
-                ]
-              }
-            ].map((section) => (
-              <Card key={section.title} className="border-gray-200 dark:border-gray-800">
-                <CardHeader>
-                  <CardTitle className="text-lg">{section.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {section.points.map((point, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Check className="h-4 w-4 text-gray-900 dark:text-white mt-0.5 flex-shrink-0" />
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Journey Progress */}
-      {isInitialized && journeyState && completedCount > 0 && (
-        <section className="py-16 border-t border-gray-200 dark:border-gray-800">
+      {/* Progress Tracker */}
+      {isInitialized && userEmail && completedCount > 0 && journeyState && (
+        <section className="py-8 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
           <div className="max-w-7xl mx-auto px-6">
             <ProgressTracker
               completedCalculators={Object.keys(journeyState.calculators) as any}
               journeyProgress={journeyProgress}
               leadScore={leadScore}
-              variant="compact"
             />
           </div>
         </section>
@@ -502,7 +684,7 @@ export default function PensionDrawdownCalculatorPage() {
         onClose={() => setShowSmartGate(false)}
         onSubmit={handleSmartGateSubmit}
         tier={3}
-        triggerReason="fourth_calculator_complete"
+        triggerReason="high_value_calculator"
         context={{
           calculatorName: 'Pension Drawdown',
           resultValue: pendingResults?.annualIncome,
