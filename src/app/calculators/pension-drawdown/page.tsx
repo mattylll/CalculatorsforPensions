@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Slider } from '@/components/ui/slider'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useJourneyState } from '@/hooks/useJourneyState'
 import { SmartGate } from '@/components/journey/SmartGate'
 import { ProgressTracker } from '@/components/journey/ProgressTracker'
@@ -38,6 +39,7 @@ export default function PensionDrawdownCalculatorPage() {
     annualPensionRequirement: 15000,
     annualGrowthRate: 5,
     inflationRate: 2.5,
+    takeTaxFreeLumpSum: true,
     taxFreeLumpSum: 25
   })
 
@@ -93,9 +95,9 @@ export default function PensionDrawdownCalculatorPage() {
       currentPot = endBalance
     }
 
-    // Pot at retirement (after tax-free lump sum)
+    // Pot at retirement (after tax-free lump sum if taken)
     const potAtRetirement = currentPot
-    const taxFreeLumpSumAmount = potAtRetirement * (inputs.taxFreeLumpSum / 100)
+    const taxFreeLumpSumAmount = inputs.takeTaxFreeLumpSum ? potAtRetirement * (inputs.taxFreeLumpSum / 100) : 0
     const remainingPotAfterLumpSum = potAtRetirement - taxFreeLumpSumAmount
     currentPot = remainingPotAfterLumpSum
 
@@ -385,25 +387,43 @@ export default function PensionDrawdownCalculatorPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Tax-Free Lump Sum (%)</Label>
-                    <div className="flex items-center gap-4 mb-2">
-                      <Input
-                        type="number"
-                        value={inputs.taxFreeLumpSum}
-                        onChange={(e) => setInputs({ ...inputs, taxFreeLumpSum: Number(e.target.value) })}
-                        className="w-24 border-gray-200 dark:border-gray-800"
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="takeTaxFreeLumpSum"
+                        checked={inputs.takeTaxFreeLumpSum}
+                        onCheckedChange={(checked) => setInputs({ ...inputs, takeTaxFreeLumpSum: checked as boolean })}
                       />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+                      <Label htmlFor="takeTaxFreeLumpSum" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                        Take tax-free lump sum at retirement
+                      </Label>
                     </div>
-                    <Slider
-                      value={[inputs.taxFreeLumpSum]}
-                      onValueChange={([value]) => setInputs({ ...inputs, taxFreeLumpSum: value })}
-                      min={0}
-                      max={25}
-                      step={5}
-                      className="py-4"
-                    />
+
+                    {inputs.takeTaxFreeLumpSum && (
+                      <div className="space-y-2 pl-6">
+                        <Label>Tax-Free Lump Sum (%)</Label>
+                        <div className="flex items-center gap-4 mb-2">
+                          <Input
+                            type="number"
+                            value={inputs.taxFreeLumpSum}
+                            onChange={(e) => setInputs({ ...inputs, taxFreeLumpSum: Number(e.target.value) })}
+                            className="w-24 border-gray-200 dark:border-gray-800"
+                          />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+                        </div>
+                        <Slider
+                          value={[inputs.taxFreeLumpSum]}
+                          onValueChange={([value]) => setInputs({ ...inputs, taxFreeLumpSum: value })}
+                          min={0}
+                          max={25}
+                          step={5}
+                          className="py-4"
+                        />
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          Maximum 25% can be taken tax-free at retirement
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -493,7 +513,7 @@ export default function PensionDrawdownCalculatorPage() {
                   </div>
 
                   {/* Tax-Free Lump Sum */}
-                  {inputs.taxFreeLumpSum > 0 && (
+                  {inputs.takeTaxFreeLumpSum && inputs.taxFreeLumpSum > 0 && (
                     <div className="p-6 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
                       <p className="text-sm text-green-800 dark:text-green-300 mb-2">Tax-Free Lump Sum</p>
                       <p className="text-4xl font-bold text-green-900 dark:text-green-100">
@@ -524,7 +544,7 @@ export default function PensionDrawdownCalculatorPage() {
                     </div>
                   </div>
 
-                  {/* Pot Depletion Chart */}
+                  {/* Pot Depletion Chart - COMPLETELY REBUILT */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Pension Pot Over Time</h3>
@@ -541,17 +561,16 @@ export default function PensionDrawdownCalculatorPage() {
                         <span>£0</span>
                       </div>
 
-                      {/* Chart area with SVG line */}
+                      {/* Chart area */}
                       <div className="ml-20 mr-4 h-[calc(100%-3rem)] relative">
-                        <svg className="w-full h-full" preserveAspectRatio="none">
+                        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                           {/* Grid lines */}
-                          <line x1="0" y1="0%" x2="100%" y2="0%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
-                          <line x1="0" y1="25%" x2="100%" y2="25%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
-                          <line x1="0" y1="50%" x2="100%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
-                          <line x1="0" y1="75%" x2="100%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" strokeDasharray="4 4" />
-                          <line x1="0" y1="100%" x2="100%" y2="100%" stroke="currentColor" strokeWidth="1" className="text-gray-300 dark:text-gray-700" />
+                          <line x1="0" y1="0" x2="100" y2="0" stroke="currentColor" strokeWidth="0.5" className="text-gray-300 dark:text-gray-700" strokeDasharray="2 2" />
+                          <line x1="0" y1="25" x2="100" y2="25" stroke="currentColor" strokeWidth="0.5" className="text-gray-300 dark:text-gray-700" strokeDasharray="2 2" />
+                          <line x1="0" y1="50" x2="100" y2="50" stroke="currentColor" strokeWidth="0.5" className="text-gray-300 dark:text-gray-700" strokeDasharray="2 2" />
+                          <line x1="0" y1="75" x2="100" y2="75" stroke="currentColor" strokeWidth="0.5" className="text-gray-300 dark:text-gray-700" strokeDasharray="2 2" />
+                          <line x1="0" y1="100" x2="100" y2="100" stroke="currentColor" strokeWidth="0.5" className="text-gray-300 dark:text-gray-700" />
 
-                          {/* Area fill under the line */}
                           <defs>
                             <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                               <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.3" />
@@ -560,92 +579,69 @@ export default function PensionDrawdownCalculatorPage() {
                           </defs>
 
                           {(() => {
-                            const dataPoints = liveResults.yearlyProjection.slice(0, 31) // Include initial point + 30 years
-                            const totalPoints = dataPoints.length
+                            // Get 30 data points including the initial one
+                            const displayData = liveResults.yearlyProjection.slice(0, 31)
 
-                            // Build path from all data points
-                            const pathCommands = dataPoints.map((year, index) => {
-                              const x = (index / (totalPoints - 1)) * 100
-                              const y = 100 - ((year.endBalance / maxPotValue) * 100)
-                              return index === 0 ? `M ${x},${y}` : `L ${x},${y}`
-                            }).join(' ')
+                            // Convert to SVG coordinates
+                            const points = displayData.map((year, idx) => ({
+                              x: (idx / 30) * 100,
+                              y: 100 - ((year.endBalance / maxPotValue) * 100),
+                              data: year
+                            }))
+
+                            // Build SVG path
+                            let pathD = points.map((p, i) =>
+                              i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
+                            ).join(' ')
 
                             return (
                               <>
-                                {/* Area fill under the line */}
+                                {/* Filled area */}
                                 <path
-                                  d={`${pathCommands} L 100,100 L 0,100 Z`}
+                                  d={`${pathD} L 100 100 L 0 100 Z`}
                                   fill="url(#areaGradient)"
-                                  className="transition-all duration-300"
                                 />
 
-                                {/* Main line */}
+                                {/* Line */}
                                 <path
-                                  d={pathCommands}
+                                  d={pathD}
                                   fill="none"
                                   stroke="rgb(59, 130, 246)"
-                                  strokeWidth="3"
+                                  strokeWidth="0.8"
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
-                                  className="transition-all duration-300"
                                 />
+
+                                {/* Data points */}
+                                {points.map((point, idx) => {
+                                  const isWarning = point.data.endBalance < liveResults.remainingPot * 0.25 && point.data.endBalance > 0
+                                  const isDepleted = point.data.endBalance <= 0
+                                  const color = isDepleted ? 'rgb(239, 68, 68)' : isWarning ? 'rgb(249, 115, 22)' : 'rgb(59, 130, 246)'
+
+                                  const tooltipText = `Age ${point.data.age}: ${formatCurrency(point.data.endBalance)}${point.data.contribution > 0 ? ` (+${formatCurrency(point.data.contribution)} contributed)` : ''}${point.data.withdrawal > 0 ? ` (-${formatCurrency(point.data.withdrawal)} withdrawn)` : ''}`
+
+                                  return (
+                                    <g key={idx}>
+                                      <circle
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r="1.2"
+                                        fill={color}
+                                      />
+                                      <title>{tooltipText}</title>
+                                    </g>
+                                  )
+                                })}
                               </>
                             )
                           })()}
-
-                          {/* Data points with hover zones */}
-                          {liveResults.yearlyProjection.slice(0, 31).map((year, index) => {
-                            const totalPoints = liveResults.yearlyProjection.slice(0, 31).length
-                            const x = (index / (totalPoints - 1)) * 100
-                            const y = 100 - ((year.endBalance / maxPotValue) * 100)
-                            const isWarning = year.endBalance < liveResults.remainingPot * 0.25 && year.endBalance > 0
-                            const isDepleted = year.endBalance <= 0
-
-                            return (
-                              <g key={index} className="group">
-                                {/* Invisible hover zone */}
-                                <circle
-                                  cx={`${x}%`}
-                                  cy={`${y}%`}
-                                  r="8"
-                                  fill="transparent"
-                                  className="cursor-pointer"
-                                />
-                                {/* Visible dot */}
-                                <circle
-                                  cx={`${x}%`}
-                                  cy={`${y}%`}
-                                  r="4"
-                                  fill={isDepleted ? 'rgb(239, 68, 68)' : isWarning ? 'rgb(249, 115, 22)' : 'rgb(59, 130, 246)'}
-                                  className="transition-all group-hover:r-6"
-                                  style={{ transformOrigin: `${x}% ${y}%` }}
-                                />
-                                {/* Tooltip - positioned in HTML coordinates */}
-                                <foreignObject
-                                  x={`${Math.max(5, Math.min(x - 10, 80))}%`}
-                                  y={`${Math.max(2, y - 25)}%`}
-                                  width="20%"
-                                  height="20%"
-                                  className="overflow-visible pointer-events-none"
-                                >
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded shadow-lg whitespace-nowrap">
-                                      <div className="font-semibold">Age {year.age}</div>
-                                      <div>Balance: {formatCurrency(year.endBalance)}</div>
-                                      <div>Withdrawal: {formatCurrency(year.withdrawal)}</div>
-                                    </div>
-                                  </div>
-                                </foreignObject>
-                              </g>
-                            )
-                          })}
                         </svg>
                       </div>
 
                       {/* X-axis labels */}
                       <div className="ml-20 mr-4 mt-2 flex justify-between text-xs text-gray-600 dark:text-gray-400">
                         <span>Age {inputs.currentAge}</span>
-                        <span>Age {inputs.currentAge + 15}</span>
+                        <span>Age {Math.floor(inputs.currentAge + (inputs.lifeExpectancy - inputs.currentAge) / 2)}</span>
                         <span>Age {Math.min(inputs.currentAge + 30, inputs.lifeExpectancy)}</span>
                       </div>
                     </div>
