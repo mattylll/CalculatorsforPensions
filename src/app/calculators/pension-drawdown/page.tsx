@@ -184,13 +184,17 @@ export default function PensionDrawdownCalculatorPage() {
     setIsCalculating(true)
     setTimeout(() => {
       try {
-        const gateDecision = checkGate()
+        // Check if this is the first calculation and no email captured yet
+        const isFirstCalculation = completedCount === 0
+        const shouldShowGateNow = isFirstCalculation && !userEmail
 
-        if (gateDecision && gateDecision.shouldShowGate && !userEmail) {
+        if (shouldShowGateNow) {
+          // Show gate before completing calculator
           setPendingResults(liveResults)
           setShowSmartGate(true)
           setIsCalculating(false)
         } else {
+          // Complete calculator and show results
           completeCalculator(
             'pension-drawdown',
             inputs,
@@ -226,8 +230,8 @@ export default function PensionDrawdownCalculatorPage() {
     }).format(value)
   }
 
-  // Get max value for chart scaling
-  const maxPotValue = Math.max(inputs.pensionPot, ...liveResults.yearlyProjection.map(y => y.endBalance))
+  // Get max value for chart scaling with 10% headroom
+  const maxPotValue = Math.max(inputs.pensionPot, ...liveResults.yearlyProjection.map(y => y.endBalance)) * 1.1
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
