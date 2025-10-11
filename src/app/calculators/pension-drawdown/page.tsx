@@ -694,8 +694,8 @@ export default function PensionDrawdownCalculatorPage() {
         isOpen={showSmartGate}
         onClose={() => setShowSmartGate(false)}
         onSubmit={handleSmartGateSubmit}
-        tier={3}
-        triggerReason="high_value_calculator"
+        tier={1}
+        triggerReason="first_calculation_complete"
         context={{
           calculatorName: 'Pension Drawdown',
           resultValue: pendingResults?.annualIncome,
