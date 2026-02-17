@@ -119,15 +119,34 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Bottom Bar */}
+      {/* Trust & Compliance Bar */}
       <div className="border-t border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 mb-6">
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              <strong className="text-gray-900 dark:text-white">Important:</strong> Calculators for Pensions
+              provides tools for guidance and educational purposes only. We do not provide financial
+              advice and are not regulated by the Financial Conduct Authority (FCA). The results from
+              our calculators are estimates based on current UK legislation and the assumptions stated
+              on our <Link href="/how-it-works" className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white">methodology page</Link>.
+              Actual pension values may differ. For personalised advice, consult a{' '}
+              <a href="https://www.unbiased.co.uk" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-gray-900 dark:hover:text-white">
+                qualified financial adviser
+              </a>.
+              Tax rates and legislation referenced are for the 2025/26 tax year.
+            </p>
+          </div>
+
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-sm text-gray-600 dark:text-gray-400 text-center md:text-left">
-              © 2025 Pension Calculators. All rights reserved.
+              © {new Date().getFullYear()} Calculators for Pensions. All rights reserved.
             </div>
-            <div className="text-xs text-gray-600 dark:text-gray-400 text-center md:text-right max-w-2xl">
-              Our calculators provide guidance only and do not constitute financial advice. Consult a qualified financial adviser for personal recommendations.
+            <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
+              <Link href="/privacy" className="hover:text-gray-900 dark:hover:text-white transition-colors">Privacy</Link>
+              <span className="hidden sm:inline">·</span>
+              <Link href="/terms" className="hover:text-gray-900 dark:hover:text-white transition-colors">Terms</Link>
+              <span className="hidden sm:inline">·</span>
+              <Link href="/how-it-works" className="hover:text-gray-900 dark:hover:text-white transition-colors">Methodology</Link>
             </div>
           </div>
         </div>
