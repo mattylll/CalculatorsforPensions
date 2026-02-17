@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
+import Script from 'next/script';
 
 import { ThemeProvider } from 'next-themes';
 
@@ -22,10 +23,17 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-    title: 'Pension Calculator - Check Your State Pension & Retirement Income (UK)',
+    metadataBase: new URL('https://calculatorsforpensions.com'),
+    title: {
+        default: 'Pension Calculator - Check Your State Pension & Retirement Income (UK)',
+        template: '%s | Calculators for Pensions',
+    },
     description: 'Use our UK pension calculator to estimate your retirement income. Check your state pension forecast, personalise your pension savings strategy, and ensure your retirement income matches the lifestyle you want.',
-    keywords: 'pension calculator, state pension forecast, retirement calculator uk, pension pot calculator, tax relief calculator',
+    keywords: 'pension calculator, state pension forecast, retirement calculator uk, pension pot calculator, tax relief calculator, workplace pension, SIPP, annuity, pension drawdown',
     authors: [{ name: 'Calculators for Pensions' }],
+    alternates: {
+        canonical: '/',
+    },
     openGraph: {
         title: 'Pension Calculator - Check Your State Pension & Retirement Income',
         description: 'Free UK pension calculators for state pension, workplace pensions, tax relief, and retirement planning.',
@@ -52,11 +60,47 @@ export const metadata: Metadata = {
     },
 };
 
+const organizationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Calculators for Pensions',
+    url: 'https://calculatorsforpensions.com',
+    description: 'Free UK pension calculators for state pension, workplace pensions, tax relief, and retirement planning.',
+    sameAs: [],
+};
+
+const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Calculators for Pensions',
+    url: 'https://calculatorsforpensions.com',
+    description: 'Free UK pension calculators to estimate your retirement income, check state pension forecasts, and optimise tax relief.',
+    potentialAction: {
+        '@type': 'SearchAction',
+        target: 'https://calculatorsforpensions.com/?q={search_term_string}',
+        'query-input': 'required name=search_term_string',
+    },
+};
+
 const Layout = ({ children }: Readonly<{ children: ReactNode }>) => {
     return (
         // ? https://github.com/pacocoursey/next-themes?tab=readme-ov-file#with-app
         // ? https://react.dev/reference/react-dom/client/hydrateRoot#suppressing-unavoidable-hydration-mismatch-errors
-        <html suppressHydrationWarning lang='en'>
+        <html suppressHydrationWarning lang='en-GB'>
+            <head>
+                <Script
+                    id="organization-schema"
+                    type="application/ld+json"
+                    strategy="beforeInteractive"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+                />
+                <Script
+                    id="website-schema"
+                    type="application/ld+json"
+                    strategy="beforeInteractive"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+                />
+            </head>
             <body
                 className={`${geistSans.variable} ${geistMono.variable} bg-background text-foreground overscroll-none antialiased`}>
                 <ThemeProvider attribute='class' defaultTheme='light' enableSystem>
