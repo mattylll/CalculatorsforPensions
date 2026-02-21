@@ -14,28 +14,18 @@ const footerLinks = {
   ],
   resources: [
     { label: 'Pension Guides', href: '/guides' },
-    { label: 'Tax & Legislation', href: '/guides/tax' },
-    { label: '2025 Updates', href: '/guides/2025-updates' },
-    { label: 'Retirement Planning', href: '/guides/retirement' },
-    { label: 'Pension Glossary', href: '/glossary' },
-    { label: 'FAQ', href: '/faq' },
+    { label: 'State Pension Guide', href: '/guides/state-pension' },
+    { label: 'Tax Relief Guide', href: '/guides/tax-relief' },
+    { label: 'Workplace Pension Guide', href: '/guides/workplace-pension' },
+    { label: 'Drawdown Guide', href: '/guides/pension-drawdown' },
+    { label: 'How It Works', href: '/how-it-works' },
   ],
   company: [
     { label: 'About Us', href: '/about' },
     { label: 'How It Works', href: '/how-it-works' },
     { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Terms of Service', href: '/terms' },
-    { label: 'Cookie Policy', href: '/cookies' },
-    { label: 'Contact', href: '/contact' },
   ],
-  popular: [
-    { label: 'Check State Pension', href: '/calculators/state-pension' },
-    { label: 'Pension Tax Relief', href: '/guides/tax-relief' },
-    { label: 'Retirement Age', href: '/guides/retirement-age' },
-    { label: 'Pension Consolidation', href: '/calculators/consolidation' },
-    { label: 'Annual Allowance', href: '/guides/annual-allowance' },
-    { label: 'Lifetime Allowance', href: '/guides/lifetime-allowance' },
-  ]
 }
 
 export default function Footer() {
@@ -110,8 +100,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/cookies" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-                  Cookie Policy
+                <Link href="/about" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+                  About Us
                 </Link>
               </li>
             </ul>

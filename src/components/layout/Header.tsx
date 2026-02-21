@@ -25,9 +25,8 @@ const calculators = [
 
 const resources = [
   { title: 'Pension Guides', href: '/guides', description: 'Comprehensive pension guides' },
-  { title: 'Tax & Legislation', href: '/guides/tax', description: '2025 tax rules and changes' },
-  { title: 'Retirement Planning', href: '/guides/retirement', description: 'Plan your retirement strategy' },
-  { title: 'FAQ', href: '/faq', description: 'Common pension questions' },
+  { title: 'How It Works', href: '/how-it-works', description: 'Our methodology & assumptions' },
+  { title: 'About Us', href: '/about', description: 'Our team and data sources' },
 ]
 
 export default function Header() {
