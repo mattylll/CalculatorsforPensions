@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadCaptureModal, LeadData } from './LeadCaptureModal'
+import { submitCapturedLead } from '@/lib/leads/client'
 import { cn } from '@/lib/utils'
 
 interface ProfessionalAdviceCTAProps {
@@ -28,18 +29,16 @@ export function ProfessionalAdviceCTA({
   const [hasSubmitted, setHasSubmitted] = useState(false)
 
   const handleLeadSubmit = async (data: LeadData) => {
-    // Here you would send the lead data to your API
-    console.log('Lead captured:', data)
-    
-    // Store lead in localStorage for now (replace with API call)
-    const leads = JSON.parse(localStorage.getItem('pension_leads') || '[]')
-    leads.push({
-      ...data,
+    const submission = await submitCapturedLead({
+      source: 'professional-advice-cta',
       calculatorType,
-      timestamp: new Date().toISOString(),
+      data,
       resultValue
     })
-    localStorage.setItem('pension_leads', JSON.stringify(leads))
+
+    if (!submission.ok && !submission.fallbackStored) {
+      throw new Error(submission.error || 'Lead submission failed.')
+    }
     
     setShowModal(false)
     setHasSubmitted(true)
@@ -142,7 +141,7 @@ export function ProfessionalAdviceCTA({
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm">FCA regulated</span>
+                    <span className="text-sm">FCA-regulated advisors</span>
                   </div>
                 </div>
                 <Button

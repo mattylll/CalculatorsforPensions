@@ -17,7 +17,7 @@ import { QualificationTier, UserProfile } from '@/lib/types/journey'
 interface SmartGateProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (data: Partial<UserProfile>) => void
+  onSubmit: (data: Partial<UserProfile>) => Promise<void> | void
   tier: QualificationTier
   triggerReason: string
   context?: {
@@ -125,6 +125,7 @@ export function SmartGate({
   const [formData, setFormData] = useState<Partial<UserProfile>>(existingProfile)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     setFormData(existingProfile)
@@ -161,12 +162,16 @@ export function SmartGate({
     if (!validateForm()) return
 
     setIsSubmitting(true)
+    setSubmitError(null)
 
-    // Simulate API call
-    setTimeout(() => {
-      onSubmit(formData)
+    try {
+      await Promise.resolve(onSubmit(formData))
+    } catch (error) {
+      console.error('Lead submission error:', error)
+      setSubmitError('We could not submit your details. Please try again.')
+    } finally {
       setIsSubmitting(false)
-    }, 1000)
+    }
   }
 
   // Get contextual messaging
@@ -507,6 +512,10 @@ export function SmartGate({
                 </div>
 
                 {/* Submit button */}
+                {submitError && (
+                  <p className="text-sm text-red-500">{submitError}</p>
+                )}
+
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
@@ -539,7 +548,7 @@ export function SmartGate({
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Shield className="h-3 w-3" />
-                    FCA regulated
+                    FCA-regulated advisors
                   </div>
                   {tier >= 3 && (
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
